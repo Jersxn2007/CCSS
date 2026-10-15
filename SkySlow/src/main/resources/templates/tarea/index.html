@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="es" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments/head :: head('Tareas')}"></head>
+<head th:replace="~{fragments/head :: head('Tareas')}">
+	
+	<link rel="icon" type="image/png" href="@{/imagenes/icons.png}">
+</head>
 <body>
 <div class="app-shell">
     <aside th:replace="~{fragments/layout :: sidebar('tareas')}"></aside>

@@ -4,7 +4,9 @@
 
 <!-- Menu lateral: activo = inicio | proyectos | tareas -->
 <aside class="app-sidebar" th:fragment="sidebar(activo)">
-    <div class="logo"><i class="bi bi-cloud-fill text-warning"></i> SkyFlow</div>
+	
+    <div>SkyFlow</div>
+	
     <a class="nav-link-sf" th:classappend="${activo == 'inicio'} ? 'active'" th:href="@{/home}">
         <i class="bi bi-house-door"></i> Inicio</a>
     <a class="nav-link-sf" th:classappend="${activo == 'proyectos'} ? 'active'" th:href="@{/proyectos}">

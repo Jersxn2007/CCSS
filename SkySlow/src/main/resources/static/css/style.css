@@ -1,4 +1,5 @@
 
+
 /* ========================================
    TIPOGRAFÍA SKYFLOW: SILKSCREEN
 ======================================== */
@@ -64,6 +65,13 @@ h3,
 .page-title,
 .logo-sf {
     font-family: 'SkyFlowFont', sans-serif;
+}
+
+
+
+
+.app-sidebar .logo {
+	text-align: center;
 }
 
 /* =========================================

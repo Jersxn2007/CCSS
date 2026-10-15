@@ -4,15 +4,29 @@
 
 <!-- Menu lateral: activo = inicio | proyectos | tareas -->
 <aside class="app-sidebar" th:fragment="sidebar(activo)">
-	
-    <div>SkyFlow</div>
-	
-    <a class="nav-link-sf" th:classappend="${activo == 'inicio'} ? 'active'" th:href="@{/home}">
-        <i class="bi bi-house-door"></i> Inicio</a>
-    <a class="nav-link-sf" th:classappend="${activo == 'proyectos'} ? 'active'" th:href="@{/proyectos}">
-        <i class="bi bi-folder2"></i> Proyectos</a>
-    <a class="nav-link-sf" th:classappend="${activo == 'tareas'} ? 'active'" th:href="@{/tareas}">
-        <i class="bi bi-check2-square"></i> Tareas</a>
+
+    <div class="logo">
+		<h1>SkyFlow</h1>
+    </div>
+
+    <a class="nav-link-sf"
+       th:classappend="${activo == 'inicio'} ? 'active'"
+       th:href="@{/home}">
+        <i class="bi bi-house-door"></i> Inicio
+    </a>
+
+    <a class="nav-link-sf"
+       th:classappend="${activo == 'proyectos'} ? 'active'"
+       th:href="@{/proyectos}">
+        <i class="bi bi-folder2"></i> Proyectos
+    </a>
+
+    <a class="nav-link-sf"
+       th:classappend="${activo == 'tareas'} ? 'active'"
+       th:href="@{/tareas}">
+        <i class="bi bi-check2-square"></i> Tareas
+    </a>
+
 </aside>
 
 <!-- Barra superior: buscador + crear proyecto + cerrar sesion -->

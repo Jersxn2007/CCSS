@@ -1,0 +1,25 @@
+package com.cibertec.skyflow.controller;
+
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ModelAttribute;
+
+import jakarta.servlet.http.HttpSession;
+
+@ControllerAdvice
+public class GlobalControllerAdvice {
+
+	/** Nombre del usuario logueado, disponible en todas las vistas. */
+	@ModelAttribute("usuarioNombre")
+	public String usuarioNombre(HttpSession session) {
+		return (String) session.getAttribute("usuarioNombre");
+	}
+
+	/** Errores de negocio de los servicios (sin permiso, no existe, etc.). */
+	@ExceptionHandler({ IllegalStateException.class, IllegalArgumentException.class })
+	public String manejarErrorNegocio(RuntimeException e, Model model) {
+		model.addAttribute("mensaje", e.getMessage());
+		return "error";
+	}
+}

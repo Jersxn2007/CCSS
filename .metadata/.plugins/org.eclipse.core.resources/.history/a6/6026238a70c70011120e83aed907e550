@@ -1,0 +1,16 @@
+package com.cibertec.app.service;
+
+import java.util.List;
+
+import com.cibertec.app.entity.Usuario;
+
+public interface UsuarioService {
+
+	Usuario registrar(Usuario usuario);
+
+	Usuario buscarPorId(Long id);
+
+	Usuario buscarPorCorreo(String correo);
+
+	List<Usuario> listarTodos();
+}

@@ -1,0 +1,23 @@
+package com.cibertec.skyflow.dto;
+
+import com.cibertec.skyflow.entity.Proyecto;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
+/** Proyecto + datos calculados para mostrar en las listas. */
+@Getter
+@AllArgsConstructor
+public class ProyectoResumen {
+
+	private final Proyecto proyecto;
+	private final String lider;
+	private final int progreso;
+
+	/** Color de la barra/punto segun el avance. */
+	public String getColor() {
+		if (progreso >= 70) return "success";
+		if (progreso >= 40) return "warning";
+		return "danger";
+	}
+}

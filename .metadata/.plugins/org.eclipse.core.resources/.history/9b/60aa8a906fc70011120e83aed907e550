@@ -1,0 +1,7 @@
+package com.cibertec.app.entity;
+
+public enum Prioridad {
+	BAJA,
+	MEDIA,
+	ALTA
+}

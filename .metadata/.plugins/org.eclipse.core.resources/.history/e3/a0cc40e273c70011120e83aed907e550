@@ -1,0 +1,197 @@
+package com.cibertec.skyflow.controller;
+
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+
+import com.cibertec.skyflow.dto.TareaResumen;
+import com.cibertec.skyflow.entity.EstadoTarea;
+import com.cibertec.skyflow.entity.NotaTarea;
+import com.cibertec.skyflow.entity.Prioridad;
+import com.cibertec.skyflow.entity.Proyecto;
+import com.cibertec.skyflow.entity.Tarea;
+import com.cibertec.skyflow.service.NotaService;
+import com.cibertec.skyflow.service.ProyectoService;
+import com.cibertec.skyflow.service.TareaService;
+
+import jakarta.servlet.http.HttpSession;
+
+@Controller
+public class TareaController extends BaseController {
+
+	private final TareaService tareaService;
+	private final ProyectoService proyectoService;
+	private final NotaService notaService;
+	private final VistaHelper vista;
+
+	public TareaController(TareaService tareaService, ProyectoService proyectoService,
+			NotaService notaService, VistaHelper vista) {
+		this.tareaService = tareaService;
+		this.proyectoService = proyectoService;
+		this.notaService = notaService;
+		this.vista = vista;
+	}
+
+	/** Lista de tareas de un proyecto (por defecto, el primero del usuario). */
+	@GetMapping("/tareas")
+	public String listar(@RequestParam(required = false) Long proyectoId, HttpSession session, Model model) {
+		Long uid = usuarioId(session);
+		List<Proyecto> proyectos = proyectoService.listarPorUsuario(uid);
+
+		Proyecto seleccionado = null;
+		if (!proyectos.isEmpty()) {
+			seleccionado = proyectos.stream()
+					.filter(p -> p.getId().equals(proyectoId))
+					.findFirst()
+					.orElse(proyectos.get(0));
+		}
+
+		List<TareaResumen> tareas = new ArrayList<>();
+		boolean esLider = false;
+		if (seleccionado != null) {
+			for (Tarea t : tareaService.listarPorProyecto(seleccionado.getId(), uid))
+				tareas.add(new TareaResumen(t, seleccionado.getId(), seleccionado.getNombre()));
+			tareas.sort(Comparator.comparing(r -> r.getTarea().getFechaFin()));
+			esLider = vista.esLider(proyectoService.listarMiembros(seleccionado.getId(), uid), uid);
+		}
+
+		long completadas = tareas.stream()
+				.filter(r -> r.getTarea().getEstado() == EstadoTarea.COMPLETADA).count();
+
+		model.addAttribute("proyectos", proyectos);
+		model.addAttribute("seleccionado", seleccionado);
+		model.addAttribute("esLider", esLider);
+		model.addAttribute("tareas", tareas);
+		model.addAttribute("total", tareas.size());
+		model.addAttribute("completadas", completadas);
+		model.addAttribute("pendientes", tareas.size() - completadas);
+		return "tarea/index";
+	}
+
+	@GetMapping("/tareas/{id}")
+	public String detalle(@PathVariable Long id, HttpSession session, Model model) {
+		Long uid = usuarioId(session);
+		Tarea tarea = tareaService.buscarPorId(id, uid);
+		Proyecto proyecto = tarea.getProyecto();
+		List<NotaTarea> notas = notaService.listarNotasTarea(id, uid);
+
+		model.addAttribute("tarea", tarea);
+		model.addAttribute("proyecto", proyecto);
+		model.addAttribute("notas", notas);
+		model.addAttribute("esLider", vista.esLider(proyectoService.listarMiembros(proyecto.getId(), uid), uid));
+		return "tarea/detail";
+	}
+
+	@PostMapping("/tareas/{id}/notas")
+	public String agregarNota(@PathVariable Long id, @RequestParam String contenido,
+			HttpSession session, RedirectAttributes ra) {
+		try {
+			notaService.agregarNotaTarea(id, usuarioId(session), contenido);
+			ra.addFlashAttribute("ok", "Nota agregada.");
+		} catch (IllegalArgumentException | IllegalStateException e) {
+			ra.addFlashAttribute("error", e.getMessage());
+		}
+		return "redirect:/tareas/" + id;
+	}
+
+	/** Solo el lider: marca la tarea y recalcula el proyecto (@Transactional en el servicio). */
+	@PostMapping("/tareas/{id}/completar")
+	public String completar(@PathVariable Long id, HttpSession session, RedirectAttributes ra) {
+		try {
+			tareaService.completarTarea(id, usuarioId(session));
+			ra.addFlashAttribute("ok", "Tarea marcada como completada.");
+		} catch (IllegalArgumentException | IllegalStateException e) {
+			ra.addFlashAttribute("error", e.getMessage());
+		}
+		return "redirect:/tareas/" + id;
+	}
+
+	@GetMapping("/proyectos/{proyectoId}/tareas/nueva")
+	public String nueva(@PathVariable Long proyectoId, HttpSession session, Model model) {
+		Long uid = usuarioId(session);
+		Proyecto proyecto = proyectoService.buscarPorId(proyectoId, uid);
+		vista.exigirLider(proyectoId, uid);
+
+		model.addAttribute("proyecto", proyecto);
+		model.addAttribute("titulo", "Crear nueva tarea");
+		model.addAttribute("boton", "Crear nueva tarea");
+		model.addAttribute("accion", "/proyectos/" + proyectoId + "/tareas");
+		model.addAttribute("volver", "/proyectos/" + proyectoId);
+		model.addAttribute("prioridadSel", "BAJA");
+		return "tarea/form";
+	}
+
+	@PostMapping("/proyectos/{proyectoId}/tareas")
+	public String crear(@PathVariable Long proyectoId, @RequestParam String titulo,
+			@RequestParam(required = false) String descripcion,
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaInicio,
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin,
+			@RequestParam Prioridad prioridad, HttpSession session, RedirectAttributes ra) {
+		try {
+			Tarea creada = tareaService.crearTarea(proyectoId, usuarioId(session),
+					armar(titulo, descripcion, fechaInicio, fechaFin, prioridad));
+			ra.addFlashAttribute("ok", "Tarea creada.");
+			return "redirect:/tareas/" + creada.getId();
+		} catch (IllegalArgumentException | IllegalStateException e) {
+			ra.addFlashAttribute("error", e.getMessage());
+			return "redirect:/proyectos/" + proyectoId + "/tareas/nueva";
+		}
+	}
+
+	@GetMapping("/tareas/{id}/editar")
+	public String editar(@PathVariable Long id, HttpSession session, Model model) {
+		Long uid = usuarioId(session);
+		Tarea tarea = tareaService.buscarPorId(id, uid);
+		vista.exigirLider(tarea.getProyecto().getId(), uid);
+
+		model.addAttribute("tarea", tarea);
+		model.addAttribute("proyecto", tarea.getProyecto());
+		model.addAttribute("titulo", "Editar tarea");
+		model.addAttribute("boton", "Guardar cambios");
+		model.addAttribute("accion", "/tareas/" + id + "/editar");
+		model.addAttribute("volver", "/tareas/" + id);
+		model.addAttribute("prioridadSel", tarea.getPrioridad().name());
+		return "tarea/form";
+	}
+
+	@PostMapping("/tareas/{id}/editar")
+	public String actualizar(@PathVariable Long id, @RequestParam String titulo,
+			@RequestParam(required = false) String descripcion,
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaInicio,
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin,
+			@RequestParam Prioridad prioridad, HttpSession session, RedirectAttributes ra) {
+		try {
+			tareaService.actualizarTarea(id, usuarioId(session),
+					armar(titulo, descripcion, fechaInicio, fechaFin, prioridad));
+			ra.addFlashAttribute("ok", "Tarea actualizada.");
+			return "redirect:/tareas/" + id;
+		} catch (IllegalArgumentException | IllegalStateException e) {
+			ra.addFlashAttribute("error", e.getMessage());
+			return "redirect:/tareas/" + id + "/editar";
+		}
+	}
+
+	private Tarea armar(String titulo, String descripcion, LocalDate inicio, LocalDate fin, Prioridad prioridad) {
+		if (titulo == null || titulo.isBlank())
+			throw new IllegalArgumentException("El nombre de la tarea es obligatorio.");
+		if (fin.isBefore(inicio))
+			throw new IllegalArgumentException("La fecha fin no puede ser anterior a la fecha inicio.");
+		Tarea tarea = new Tarea();
+		tarea.setTitulo(titulo.trim());
+		tarea.setDescripcion(descripcion);
+		tarea.setFechaInicio(inicio);
+		tarea.setFechaFin(fin);
+		tarea.setPrioridad(prioridad);
+		return tarea;
+	}
+}

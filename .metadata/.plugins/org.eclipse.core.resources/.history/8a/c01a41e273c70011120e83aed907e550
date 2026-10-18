@@ -1,0 +1,58 @@
+package com.cibertec.skyflow.controller;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
+
+import com.cibertec.skyflow.dto.ProyectoResumen;
+import com.cibertec.skyflow.dto.TareaResumen;
+import com.cibertec.skyflow.entity.EstadoTarea;
+import com.cibertec.skyflow.entity.Proyecto;
+import com.cibertec.skyflow.entity.Tarea;
+import com.cibertec.skyflow.service.ProyectoService;
+import com.cibertec.skyflow.service.TareaService;
+
+import jakarta.servlet.http.HttpSession;
+
+@Controller
+public class HomeController extends BaseController {
+
+	private final ProyectoService proyectoService;
+	private final TareaService tareaService;
+	private final VistaHelper vista;
+
+	public HomeController(ProyectoService proyectoService, TareaService tareaService, VistaHelper vista) {
+		this.proyectoService = proyectoService;
+		this.tareaService = tareaService;
+		this.vista = vista;
+	}
+
+	@GetMapping("/home")
+	public String home(HttpSession session, Model model) {
+		Long uid = usuarioId(session);
+
+		List<ProyectoResumen> proyectos = new ArrayList<>();
+		List<TareaResumen> pendientes = new ArrayList<>();
+		long completadas = 0;
+
+		for (Proyecto p : proyectoService.listarPorUsuario(uid)) {
+			proyectos.add(vista.resumen(p, uid));
+			for (Tarea t : tareaService.listarPorProyecto(p.getId(), uid)) {
+				if (t.getEstado() == EstadoTarea.COMPLETADA) completadas++;
+				else pendientes.add(new TareaResumen(t, p.getId(), p.getNombre()));
+			}
+		}
+		pendientes.sort(Comparator.comparing(r -> r.getTarea().getFechaFin()));
+
+		model.addAttribute("proyectos", proyectos);
+		model.addAttribute("tareas", pendientes);
+		model.addAttribute("totalProyectos", proyectos.size());
+		model.addAttribute("totalPendientes", pendientes.size());
+		model.addAttribute("totalCompletadas", completadas);
+		return "home";
+	}
+}

@@ -1,0 +1,50 @@
+package com.cibertec.skyflow.controller;
+
+import java.util.List;
+
+import org.springframework.stereotype.Component;
+
+import com.cibertec.skyflow.dto.ProyectoResumen;
+import com.cibertec.skyflow.entity.MiembroProyecto;
+import com.cibertec.skyflow.entity.Proyecto;
+import com.cibertec.skyflow.entity.RolProyecto;
+import com.cibertec.skyflow.service.ProyectoService;
+import com.cibertec.skyflow.service.TareaService;
+
+/** Calculos compartidos por los controladores (lider, progreso, rol del usuario). */
+@Component
+public class VistaHelper {
+
+	private final ProyectoService proyectoService;
+	private final TareaService tareaService;
+
+	public VistaHelper(ProyectoService proyectoService, TareaService tareaService) {
+		this.proyectoService = proyectoService;
+		this.tareaService = tareaService;
+	}
+
+	public ProyectoResumen resumen(Proyecto proyecto, Long usuarioId) {
+		List<MiembroProyecto> miembros = proyectoService.listarMiembros(proyecto.getId(), usuarioId);
+		return new ProyectoResumen(proyecto, nombreLider(miembros),
+				tareaService.calcularProgreso(proyecto.getId()));
+	}
+
+	public String nombreLider(List<MiembroProyecto> miembros) {
+		return miembros.stream()
+				.filter(m -> m.getRol() == RolProyecto.LIDER)
+				.map(m -> m.getUsuario().getNombre() + " " + m.getUsuario().getApellido())
+				.findFirst()
+				.orElse("-");
+	}
+
+	public boolean esLider(List<MiembroProyecto> miembros, Long usuarioId) {
+		return miembros.stream().anyMatch(
+				m -> m.getRol() == RolProyecto.LIDER && m.getUsuario().getId().equals(usuarioId));
+	}
+
+	/** Lanza IllegalStateException si el usuario no es lider del proyecto. */
+	public void exigirLider(Long proyectoId, Long usuarioId) {
+		if (!esLider(proyectoService.listarMiembros(proyectoId, usuarioId), usuarioId))
+			throw new IllegalStateException("Solo el lider puede realizar esta accion.");
+	}
+}

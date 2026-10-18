@@ -1,0 +1,38 @@
+package com.cibertec.skyflow.dto;
+
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
+
+import com.cibertec.skyflow.entity.EstadoTarea;
+import com.cibertec.skyflow.entity.Tarea;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
+/** Tarea + nombre del proyecto y texto de vencimiento para las listas. */
+@Getter
+@AllArgsConstructor
+public class TareaResumen {
+
+	private static final DateTimeFormatter FORMATO =
+			DateTimeFormatter.ofPattern("dd MMM", Locale.forLanguageTag("es-PE"));
+
+	private final Tarea tarea;
+	private final Long proyectoId;
+	private final String proyectoNombre;
+
+	/** "Hoy", "Mañana" o la fecha corta. */
+	public String getVencimiento() {
+		LocalDate hoy = LocalDate.now();
+		LocalDate fin = tarea.getFechaFin();
+		if (fin.equals(hoy)) return "Hoy";
+		if (fin.equals(hoy.plusDays(1))) return "Mañana";
+		return fin.format(FORMATO);
+	}
+
+	/** True si esta pendiente y vence hoy o ya vencio. */
+	public boolean isUrgente() {
+		return tarea.getEstado() == EstadoTarea.PENDIENTE && !tarea.getFechaFin().isAfter(LocalDate.now());
+	}
+}

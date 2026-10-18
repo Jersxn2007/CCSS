@@ -1,0 +1,182 @@
+package com.cibertec.skyflow.controller;
+
+import java.time.LocalDate;
+import java.util.Comparator;
+import java.util.List;
+
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+
+import com.cibertec.skyflow.dto.ProyectoResumen;
+import com.cibertec.skyflow.dto.TareaResumen;
+import com.cibertec.skyflow.entity.EstadoProyecto;
+import com.cibertec.skyflow.entity.EstadoTarea;
+import com.cibertec.skyflow.entity.MiembroProyecto;
+import com.cibertec.skyflow.entity.NotaProyecto;
+import com.cibertec.skyflow.entity.Proyecto;
+import com.cibertec.skyflow.entity.Tarea;
+import com.cibertec.skyflow.service.NotaService;
+import com.cibertec.skyflow.service.ProyectoService;
+import com.cibertec.skyflow.service.TareaService;
+
+import jakarta.servlet.http.HttpSession;
+
+@Controller
+public class ProyectoController extends BaseController {
+
+	private final ProyectoService proyectoService;
+	private final TareaService tareaService;
+	private final NotaService notaService;
+	private final VistaHelper vista;
+
+	public ProyectoController(ProyectoService proyectoService, TareaService tareaService,
+			NotaService notaService, VistaHelper vista) {
+		this.proyectoService = proyectoService;
+		this.tareaService = tareaService;
+		this.notaService = notaService;
+		this.vista = vista;
+	}
+
+	@GetMapping("/proyectos")
+	public String listar(HttpSession session, Model model) {
+		Long uid = usuarioId(session);
+		List<ProyectoResumen> proyectos = proyectoService.listarPorUsuario(uid).stream()
+				.map(p -> vista.resumen(p, uid))
+				.toList();
+
+		long activos = proyectos.stream()
+				.filter(r -> r.getProyecto().getEstado() == EstadoProyecto.PENDIENTE).count();
+
+		model.addAttribute("proyectos", proyectos);
+		model.addAttribute("total", proyectos.size());
+		model.addAttribute("activos", activos);
+		model.addAttribute("finalizados", proyectos.size() - activos);
+		return "proyecto/index";
+	}
+
+	@GetMapping("/proyectos/nuevo")
+	public String nuevo(Model model) {
+		model.addAttribute("titulo", "Crear nuevo proyecto");
+		model.addAttribute("boton", "Crear Proyecto");
+		model.addAttribute("accion", "/proyectos");
+		model.addAttribute("volver", "/proyectos");
+		return "proyecto/form";
+	}
+
+	@PostMapping("/proyectos")
+	public String crear(@RequestParam String nombre,
+			@RequestParam(required = false) String descripcion,
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaInicio,
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin,
+			HttpSession session, RedirectAttributes ra) {
+		try {
+			Proyecto proyecto = armar(nombre, descripcion, fechaInicio, fechaFin);
+			Proyecto creado = proyectoService.crearProyecto(proyecto, usuarioId(session));
+			ra.addFlashAttribute("ok", "Proyecto creado. Ahora eres su lider.");
+			return "redirect:/proyectos/" + creado.getId();
+		} catch (IllegalArgumentException | IllegalStateException e) {
+			ra.addFlashAttribute("error", e.getMessage());
+			return "redirect:/proyectos/nuevo";
+		}
+	}
+
+	@GetMapping("/proyectos/{id}")
+	public String detalle(@PathVariable Long id, HttpSession session, Model model) {
+		Long uid = usuarioId(session);
+
+		Proyecto proyecto = proyectoService.buscarPorId(id, uid);
+		List<MiembroProyecto> miembros = proyectoService.listarMiembros(id, uid);
+		List<Tarea> tareas = tareaService.listarPorProyecto(id, uid);
+		List<NotaProyecto> notas = notaService.listarNotasProyecto(id, uid);
+
+		long completadas = tareas.stream().filter(t -> t.getEstado() == EstadoTarea.COMPLETADA).count();
+		List<TareaResumen> tareasVista = tareas.stream()
+				.map(t -> new TareaResumen(t, id, proyecto.getNombre()))
+				.sorted(Comparator.comparing(r -> r.getTarea().getFechaFin()))
+				.toList();
+
+		model.addAttribute("proyecto", proyecto);
+		model.addAttribute("lider", vista.nombreLider(miembros));
+		model.addAttribute("esLider", vista.esLider(miembros, uid));
+		model.addAttribute("miembros", miembros);
+		model.addAttribute("tareas", tareasVista);
+		model.addAttribute("notas", notas);
+		model.addAttribute("progreso", tareaService.calcularProgreso(id));
+		model.addAttribute("totalTareas", tareas.size());
+		model.addAttribute("completadas", completadas);
+		model.addAttribute("pendientes", tareas.size() - completadas);
+		return "proyecto/detail";
+	}
+
+	@GetMapping("/proyectos/{id}/editar")
+	public String editar(@PathVariable Long id, HttpSession session, Model model) {
+		Long uid = usuarioId(session);
+		Proyecto proyecto = proyectoService.buscarPorId(id, uid);
+		vista.exigirLider(id, uid);
+
+		model.addAttribute("proyecto", proyecto);
+		model.addAttribute("titulo", "Editar proyecto");
+		model.addAttribute("boton", "Guardar cambios");
+		model.addAttribute("accion", "/proyectos/" + id + "/editar");
+		model.addAttribute("volver", "/proyectos/" + id);
+		return "proyecto/form";
+	}
+
+	@PostMapping("/proyectos/{id}/editar")
+	public String actualizar(@PathVariable Long id, @RequestParam String nombre,
+			@RequestParam(required = false) String descripcion,
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaInicio,
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin,
+			HttpSession session, RedirectAttributes ra) {
+		try {
+			proyectoService.actualizarProyecto(id, usuarioId(session),
+					armar(nombre, descripcion, fechaInicio, fechaFin));
+			ra.addFlashAttribute("ok", "Proyecto actualizado.");
+			return "redirect:/proyectos/" + id;
+		} catch (IllegalArgumentException | IllegalStateException e) {
+			ra.addFlashAttribute("error", e.getMessage());
+			return "redirect:/proyectos/" + id + "/editar";
+		}
+	}
+
+	@PostMapping("/proyectos/{id}/miembros")
+	public String agregarMiembro(@PathVariable Long id, @RequestParam String correo,
+			HttpSession session, RedirectAttributes ra) {
+		try {
+			proyectoService.agregarMiembro(id, usuarioId(session), correo.trim());
+			ra.addFlashAttribute("ok", "Miembro agregado como subordinado.");
+		} catch (IllegalArgumentException | IllegalStateException e) {
+			ra.addFlashAttribute("error", e.getMessage());
+		}
+		return "redirect:/proyectos/" + id;
+	}
+
+	@PostMapping("/proyectos/{id}/notas")
+	public String agregarNota(@PathVariable Long id, @RequestParam String contenido,
+			HttpSession session, RedirectAttributes ra) {
+		try {
+			notaService.agregarNotaProyecto(id, usuarioId(session), contenido);
+			ra.addFlashAttribute("ok", "Nota agregada.");
+		} catch (IllegalArgumentException | IllegalStateException e) {
+			ra.addFlashAttribute("error", e.getMessage());
+		}
+		return "redirect:/proyectos/" + id;
+	}
+
+	private Proyecto armar(String nombre, String descripcion, LocalDate inicio, LocalDate fin) {
+		if (nombre == null || nombre.isBlank())
+			throw new IllegalArgumentException("El nombre del proyecto es obligatorio.");
+		Proyecto proyecto = new Proyecto();
+		proyecto.setNombre(nombre.trim());
+		proyecto.setDescripcion(descripcion);
+		proyecto.setFechaInicio(inicio);
+		proyecto.setFechaFin(fin);
+		return proyecto;
+	}
+}

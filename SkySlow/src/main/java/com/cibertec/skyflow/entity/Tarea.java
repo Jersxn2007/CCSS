@@ -75,4 +75,10 @@ public class Tarea implements Serializable {
 	public void completar() {
 		this.estado = EstadoTarea.COMPLETADA;
 	}
+
+	public static long getSerialversionuid() {
+		return serialVersionUID;
+	}
+
+	
 }

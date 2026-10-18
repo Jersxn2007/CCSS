@@ -1,0 +1,11 @@
+package com.cibertec.skyflow.controller;
+
+import jakarta.servlet.http.HttpSession;
+
+public abstract class BaseController {
+
+	/** Id del usuario logueado (lo guarda AuthController al iniciar sesion). */
+	protected Long usuarioId(HttpSession session) {
+		return (Long) session.getAttribute("usuarioId");
+	}
+}

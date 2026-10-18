@@ -1,0 +1,89 @@
+package com.cibertec.skyflow.controller;
+
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+
+import com.cibertec.skyflow.entity.Usuario;
+import com.cibertec.skyflow.service.UsuarioService;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
+
+@Controller
+public class AuthController {
+
+	private final UsuarioService usuarioService;
+
+	public AuthController(UsuarioService usuarioService) {
+		this.usuarioService = usuarioService;
+	}
+
+	@GetMapping("/")
+	public String raiz(HttpSession session) {
+		return session.getAttribute("usuarioId") != null ? "redirect:/home" : "redirect:/login";
+	}
+
+	@GetMapping("/login")
+	public String login(HttpSession session) {
+		if (session.getAttribute("usuarioId") != null) return "redirect:/home";
+		return "login";
+	}
+
+	@PostMapping("/login")
+	public String iniciarSesion(@RequestParam String correo, @RequestParam String password,
+			HttpServletRequest request, Model model) {
+		try {
+			Usuario usuario = usuarioService.buscarPorCorreo(correo.trim());
+			if (!usuario.getPassword().equals(password))
+				throw new IllegalArgumentException("Credenciales invalidas.");
+
+			HttpSession anterior = request.getSession(false);
+			if (anterior != null) anterior.invalidate();
+			HttpSession session = request.getSession(true);
+			session.setAttribute("usuarioId", usuario.getId());
+			session.setAttribute("usuarioNombre", usuario.getNombre() + " " + usuario.getApellido());
+			return "redirect:/home";
+		} catch (IllegalArgumentException e) {
+			model.addAttribute("error", "Correo o contraseña incorrectos.");
+			model.addAttribute("correo", correo);
+			return "login";
+		}
+	}
+
+	@GetMapping("/register")
+	public String formularioRegistro() {
+		return "register";
+	}
+
+	@PostMapping("/register")
+	public String registrar(@RequestParam String nombre, @RequestParam String apellido,
+			@RequestParam String correo, @RequestParam String password, Model model) {
+		try {
+			if (nombre.isBlank() || apellido.isBlank() || correo.isBlank() || password.isBlank())
+				throw new IllegalArgumentException("Completa todos los campos.");
+
+			Usuario usuario = new Usuario();
+			usuario.setNombre(nombre.trim());
+			usuario.setApellido(apellido.trim());
+			usuario.setCorreo(correo.trim());
+			usuario.setPassword(password);
+			usuarioService.registrar(usuario);
+			return "redirect:/login?registrado";
+		} catch (IllegalArgumentException e) {
+			model.addAttribute("error", e.getMessage());
+			model.addAttribute("nombre", nombre);
+			model.addAttribute("apellido", apellido);
+			model.addAttribute("correo", correo);
+			return "register";
+		}
+	}
+
+	@GetMapping("/logout")
+	public String cerrarSesion(HttpSession session) {
+		session.invalidate();
+		return "redirect:/login";
+	}
+}

@@ -1,0 +1,5 @@
+package com.cibertec.skyflow.entity;
+
+public class Usuario {
+
+}
